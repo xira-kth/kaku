@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 jobs:
-  dist:
+  plan:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,6 +20,30 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: cargo install cargo-dist --locked --version 0.31.0
-      - name: Build and publish artifacts
-        run: cargo dist build --artifacts=all
+      - name: Validate release plan
+        run: cargo dist plan
 
+  build:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release binary
+        run: cargo build --profile dist --locked --target ${{ matrix.target }} -p kaku

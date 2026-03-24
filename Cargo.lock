@@ -269,7 +269,8 @@ dependencies = [
  "kaku-render",
  "notify",
  "pico-args",
- "regex-automata",
+ "unicode-segmentation",
+ "unicode-width",
 ]
 
 [[package]]

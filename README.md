@@ -1,6 +1,6 @@
 # kaku
 
-`kaku` is a fast Markdown viewer for terminals.
+`kaku` is a fast, minimal Markdown reader for terminals.
 
 It is built as a small Rust workspace with three clean layers:
 
@@ -8,22 +8,31 @@ It is built as a small Rust workspace with three clean layers:
 - `kaku-render` turns the document model into ANSI layout lines.
 - `kaku` provides the CLI, pager loop, search, and watch mode.
 
+## Philosophy
+
+- Read one document well
+- Stay local and terminal-native
+- Use a centered reading column on wide terminals
+- Prefer calm output over decorative styling
+- Keep the command surface small
+
 ## Features
 
-- Full-screen pager and one-shot print mode
+- Full-screen pager for local files and stdin
+- Plain stdout output with `-p`
 - Unicode-aware wrapping for CJK and emoji-heavy text
 - Headings, lists, tables, blockquotes, task lists, links, and code blocks
-- Optional syntax highlighting behind a Cargo feature
 - Search, TOC panel, file watching, and stdin support
 
 ## Usage
 
 ```bash
 kaku README.md
-cat README.md | kaku --stdin
-kaku --print README.md
-kaku --watch README.md
-kaku --toc README.md
+kaku -
+cat README.md | kaku
+kaku -p README.md
+kaku -w README.md
+kaku -t README.md
 ```
 
 ## Pager Keys
@@ -39,6 +48,7 @@ kaku --toc README.md
 - `Enter`: jump to the selected TOC entry
 - `o`: open the first link near the current viewport
 - `r`: reload
+- `?`: show a short key hint
 - `q`: quit
 
 ## Packaging
@@ -46,4 +56,3 @@ kaku --toc README.md
 The workspace ships with `cargo-dist` metadata for GitHub Releases, Homebrew, and npm.
 Update the repository, tap, and scope values in the root `Cargo.toml` if your release
 infrastructure uses different owners.
-

@@ -30,7 +30,7 @@ pub struct LayoutLine {
 
 impl LayoutLine {
     pub fn to_ansi_string(&self) -> String {
-        let mut out = String::new();
+        let mut out = format!("{}", Style::new().render_reset());
         for span in &self.spans {
             let _ = write!(out, "{}", span.style.render());
             out.push_str(&span.text);
@@ -131,16 +131,22 @@ impl Renderer {
 
     fn render_heading(&mut self, level: HeadingLevel, text: &[Inline], indent: usize) {
         let prefix = format!("{} ", "#".repeat(level.as_usize()));
-        let spans = inlines_to_spans(text, self.theme)
-            .into_iter()
-            .map(|mut span| {
-                span.style = heading_style(self.theme, level).effects(Effects::BOLD);
-                span
-            })
-            .collect::<Vec<_>>();
+        let mut spans = vec![styled(
+            prefix.clone(),
+            heading_style(self.theme, level).effects(Effects::BOLD),
+            None,
+        )];
+        spans.extend(
+            inlines_to_spans(text, self.theme)
+                .into_iter()
+                .map(|mut span| {
+                    span.style = heading_style(self.theme, level);
+                    span
+                }),
+        );
 
         let line_index = self.lines.len();
-        self.push_wrapped(spans, indent, &prefix, &" ".repeat(prefix.len()));
+        self.push_wrapped(spans, indent, "", &" ".repeat(prefix.len()));
         self.toc.push(TocEntry {
             title: plain_text_from_inlines(text),
             level,
@@ -393,7 +399,7 @@ impl Renderer {
 fn render_code_lines(fence: &CodeFence, theme: Theme, enabled: bool) -> Vec<Vec<StyledSpan>> {
     #[cfg(feature = "syntax")]
     {
-        if enabled {
+        if enabled && !theme.monochrome {
             return crate::syntax::highlight_code(fence, theme);
         }
     }
