@@ -23,8 +23,8 @@ kaku-core = { path = "../kaku-core" }
 kaku-render = { path = "../kaku-render", default-features = false }
 notify.workspace = true
 pico-args.workspace = true
-regex-automata.workspace = true
+unicode-segmentation.workspace = true
+unicode-width.workspace = true
 
 [dev-dependencies]
 anstyle.workspace = true
-

@@ -1,5 +1,3 @@
-use regex_automata::meta::Regex;
-
 use kaku_core::Document;
 use kaku_render::{Layout, LayoutLine, LayoutOptions, ThemeName, TocEntry, layout_document};
 
@@ -7,7 +5,9 @@ use kaku_render::{Layout, LayoutLine, LayoutOptions, ThemeName, TocEntry, layout
 pub struct AppState {
     pub document: Document,
     pub layout: Layout,
+    pub source_name: String,
     pub scroll: usize,
+    pub terminal_width: usize,
     pub viewport_height: usize,
     pub status: String,
     pub toc_open: bool,
@@ -20,59 +20,46 @@ pub struct AppState {
 impl AppState {
     pub fn new(
         document: Document,
+        source_name: String,
         width: usize,
         height: usize,
         theme: ThemeName,
         syntax_highlighting: bool,
         toc_open: bool,
     ) -> Self {
-        let layout = layout_document(
-            &document,
-            &LayoutOptions {
-                width,
-                theme,
-                syntax_highlighting,
-            },
-        );
-
-        Self {
+        let mut app = Self {
             document,
-            layout,
+            layout: Layout {
+                lines: Vec::new(),
+                toc: Vec::new(),
+            },
+            source_name,
             scroll: 0,
+            terminal_width: width,
             viewport_height: height.saturating_sub(1),
-            status: "Press / to search, t for TOC, q to quit".to_string(),
+            status: "j/k move  / search  ? help  q quit".to_string(),
             toc_open,
             toc_selected: 0,
             theme,
             syntax_highlighting,
             search: SearchState::default(),
-        }
+        };
+        app.relayout();
+        app
     }
 
     pub fn resize(&mut self, width: usize, height: usize) {
+        self.terminal_width = width;
         self.viewport_height = height.saturating_sub(1);
-        self.layout = layout_document(
-            &self.document,
-            &LayoutOptions {
-                width,
-                theme: self.theme,
-                syntax_highlighting: self.syntax_highlighting,
-            },
-        );
+        self.relayout();
         self.scroll = self.scroll.min(self.max_scroll());
         self.realign_toc_selection();
     }
 
     pub fn replace_document(&mut self, document: Document, width: usize) {
         self.document = document;
-        self.layout = layout_document(
-            &self.document,
-            &LayoutOptions {
-                width,
-                theme: self.theme,
-                syntax_highlighting: self.syntax_highlighting,
-            },
-        );
+        self.terminal_width = width;
+        self.relayout();
         self.scroll = self.scroll.min(self.max_scroll());
         self.status = "reloaded".to_string();
         self.apply_search();
@@ -114,6 +101,8 @@ impl AppState {
 
     pub fn toggle_toc(&mut self) {
         self.toc_open = !self.toc_open;
+        self.relayout();
+        self.scroll = self.scroll.min(self.max_scroll());
         self.realign_toc_selection();
     }
 
@@ -194,14 +183,7 @@ impl AppState {
             return;
         }
 
-        let pattern = format!("(?i){}", self.search.query);
-        let regex = match Regex::new(&pattern) {
-            Ok(regex) => regex,
-            Err(error) => {
-                self.status = format!("invalid search: {error}");
-                return;
-            }
-        };
+        let query = self.search.query.to_lowercase();
 
         self.search.matches = self
             .layout
@@ -209,7 +191,7 @@ impl AppState {
             .iter()
             .enumerate()
             .filter_map(|(index, line)| {
-                if regex.is_match(line.plain_text.as_bytes()) {
+                if line.plain_text.to_lowercase().contains(&query) {
                     Some(index)
                 } else {
                     None
@@ -232,6 +214,68 @@ impl AppState {
             .lines
             .len()
             .saturating_sub(self.viewport_height.max(1))
+    }
+
+    fn relayout(&mut self) {
+        self.layout = layout_document(
+            &self.document,
+            &LayoutOptions {
+                width: self.body_width(),
+                theme: self.theme,
+                syntax_highlighting: self.syntax_highlighting,
+            },
+        );
+    }
+
+    fn body_width(&self) -> usize {
+        if self.toc_width() > 0 {
+            self.frame_width()
+                .saturating_sub(self.toc_width())
+                .saturating_sub(self.frame_gap())
+                .max(24)
+        } else {
+            self.frame_width()
+        }
+    }
+
+    pub fn toc_width(&self) -> usize {
+        let frame_width = self.frame_width();
+        if self.toc_open && frame_width >= 64 {
+            frame_width.saturating_div(4).clamp(18, 24)
+        } else {
+            0
+        }
+    }
+
+    pub fn frame_width(&self) -> usize {
+        let edge_margin = if self.terminal_width >= 96 { 12 } else { 4 };
+        let usable = self.terminal_width.saturating_sub(edge_margin * 2).max(1);
+        let minimum = self.terminal_width.clamp(1, 24);
+        let width = if usable < minimum {
+            self.terminal_width.max(1)
+        } else {
+            usable
+        };
+        width.clamp(minimum, 84)
+    }
+
+    pub fn frame_x(&self) -> usize {
+        self.terminal_width
+            .saturating_sub(self.frame_width())
+            .saturating_div(2)
+    }
+
+    pub fn body_x(&self) -> usize {
+        self.frame_x()
+            + if self.toc_width() > 0 {
+                self.toc_width() + self.frame_gap()
+            } else {
+                0
+            }
+    }
+
+    pub fn frame_gap(&self) -> usize {
+        if self.toc_width() > 0 { 2 } else { 0 }
     }
 
     fn realign_toc_selection(&mut self) {
@@ -270,7 +314,15 @@ mod tests {
     #[test]
     fn search_moves_scroll() {
         let doc = parse_document("# One\n\nHello\n\n# Two\n\nWorld\n");
-        let mut app = AppState::new(doc, 80, 3, ThemeName::Dark, false, false);
+        let mut app = AppState::new(
+            doc,
+            "test.md".to_string(),
+            80,
+            3,
+            ThemeName::Dark,
+            false,
+            false,
+        );
         app.apply_search_query("world".to_string());
 
         assert_eq!(app.search.matches.len(), 1);
@@ -280,10 +332,56 @@ mod tests {
     #[test]
     fn toc_jump_uses_selected_entry() {
         let doc = parse_document("# One\n\n## Two\n");
-        let mut app = AppState::new(doc, 80, 2, ThemeName::Dark, false, true);
+        let mut app = AppState::new(
+            doc,
+            "test.md".to_string(),
+            80,
+            2,
+            ThemeName::Dark,
+            false,
+            true,
+        );
         app.select_next_toc();
         app.jump_to_selected_toc();
 
         assert!(app.scroll > 0);
+    }
+
+    #[test]
+    fn toggling_toc_reflows_for_narrower_body() {
+        let doc = parse_document("0123456789012345678901234567890123456789");
+        let mut app = AppState::new(
+            doc,
+            "test.md".to_string(),
+            40,
+            10,
+            ThemeName::Dark,
+            false,
+            false,
+        );
+        let without_toc = app.layout.lines.len();
+
+        app.toggle_toc();
+
+        assert!(app.layout.lines.len() >= without_toc);
+        assert_eq!(app.toc_width(), 0);
+        assert_eq!(app.body_width(), 32);
+    }
+
+    #[test]
+    fn toc_keeps_a_visible_body_on_small_terminals() {
+        let doc = parse_document("# One\n\nbody");
+        let app = AppState::new(
+            doc,
+            "test.md".to_string(),
+            12,
+            10,
+            ThemeName::Dark,
+            false,
+            true,
+        );
+
+        assert_eq!(app.toc_width(), 0);
+        assert_eq!(app.body_width(), 12);
     }
 }

@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::io::IsTerminal;
+use std::path::{Path, PathBuf};
 
 use pico_args::Arguments;
 
@@ -8,12 +9,13 @@ use kaku_render::ThemeName;
 pub struct CliArgs {
     pub path: Option<PathBuf>,
     pub read_stdin: bool,
-    pub print: bool,
+    pub plain: bool,
     pub watch: bool,
     pub toc_open: bool,
     pub syntax_highlighting: bool,
     pub theme: ThemeName,
     pub help: bool,
+    pub version: bool,
 }
 
 impl CliArgs {
@@ -24,24 +26,40 @@ impl CliArgs {
             return Ok(Self {
                 path: None,
                 read_stdin: false,
-                print: false,
+                plain: false,
                 watch: false,
                 toc_open: false,
                 syntax_highlighting: true,
                 theme: ThemeName::Auto,
                 help: true,
+                version: false,
             });
         }
 
-        let read_stdin = args.contains("--stdin");
-        let print = args.contains("--print");
-        let watch = args.contains("--watch");
-        let toc_open = args.contains("--toc");
+        if args.contains(["-V", "--version"]) {
+            return Ok(Self {
+                path: None,
+                read_stdin: false,
+                plain: false,
+                watch: false,
+                toc_open: false,
+                syntax_highlighting: true,
+                theme: ThemeName::Auto,
+                help: false,
+                version: true,
+            });
+        }
+
+        let explicit_stdin = args.contains("--stdin");
+        let plain = args.contains(["-p", "--plain"]) || args.contains("--print");
+        let watch = args.contains(["-w", "--watch"]);
+        let toc_open = args.contains(["-t", "--toc"]);
         let syntax_highlighting = !args.contains("--no-syntax");
 
-        let theme = match args.opt_value_from_str::<_, String>("--theme") {
-            Ok(Some(name)) => ThemeName::parse(&name)
-                .ok_or_else(|| format!("unknown theme '{name}', expected auto|light|dark|ansi"))?,
+        let theme = match args.opt_value_from_str::<_, String>(["-T", "--theme"]) {
+            Ok(Some(name)) => ThemeName::parse(&name).ok_or_else(|| {
+                format!("unknown theme '{name}', expected auto|light|dark|minimal")
+            })?,
             Ok(None) => ThemeName::Auto,
             Err(error) => return Err(error.to_string()),
         };
@@ -57,38 +75,62 @@ impl CliArgs {
             return Err(format!("unexpected argument {:?}", remaining[0]));
         }
 
+        let read_stdin = explicit_stdin
+            || matches!(path.as_deref(), Some(path) if path == Path::new("-"))
+            || (path.is_none() && !std::io::stdin().is_terminal());
+
+        let path = match path {
+            Some(path) if path == Path::new("-") => None,
+            other => other,
+        };
+
         if !read_stdin && path.is_none() {
-            return Err("expected a file path or --stdin".to_string());
+            return Err("expected a file path or piped stdin".to_string());
+        }
+
+        if watch && path.is_none() {
+            return Err("--watch requires a file path".to_string());
         }
 
         Ok(Self {
             path,
             read_stdin,
-            print,
+            plain,
             watch,
             toc_open,
             syntax_highlighting,
             theme,
             help: false,
+            version: false,
         })
     }
 
     pub fn usage() -> &'static str {
         "\
-kaku - fast terminal Markdown viewer
+kaku - fast, minimal Markdown reader for terminals
 
 USAGE:
+  kaku <FILE>
   kaku [OPTIONS] <FILE>
-  cat README.md | kaku --stdin
+  cat README.md | kaku
+  kaku < README.md
 
 OPTIONS:
-  --stdin         Read Markdown from stdin
-  --print         Render once to stdout instead of starting the pager
-  --watch         Reload on file changes
-  --toc           Start with the TOC panel open
-  --theme <NAME>  auto | light | dark | ansi
-  --no-syntax     Disable syntax highlighting for code blocks
-  -h, --help      Show this help message
+  -p, --plain         Render once to plain stdout
+  -w, --watch         Reload when the file changes
+  -t, --toc           Start with the table of contents open
+  -T, --theme <NAME>  auto | light | dark | minimal
+  --stdin             Force reading from stdin
+  --no-syntax         Disable syntax highlighting
+  -h, --help          Show help
+  -V, --version       Show version
+
+EXAMPLES:
+  kaku README.md
+  kaku -p README.md
+  kaku -w README.md
+  kaku -
+  cat README.md | kaku
 "
     }
 }

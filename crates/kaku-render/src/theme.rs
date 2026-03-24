@@ -5,7 +5,7 @@ pub enum ThemeName {
     Auto,
     Light,
     Dark,
-    Ansi,
+    Minimal,
 }
 
 impl ThemeName {
@@ -14,7 +14,7 @@ impl ThemeName {
             "auto" => Some(Self::Auto),
             "light" => Some(Self::Light),
             "dark" => Some(Self::Dark),
-            "ansi" => Some(Self::Ansi),
+            "minimal" | "ansi" => Some(Self::Minimal),
             _ => None,
         }
     }
@@ -22,6 +22,7 @@ impl ThemeName {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Theme {
+    pub monochrome: bool,
     pub heading: AnsiColor,
     pub link: AnsiColor,
     pub code: AnsiColor,
@@ -34,32 +35,45 @@ pub struct Theme {
 impl Theme {
     pub fn resolve(name: ThemeName) -> Self {
         match name {
-            ThemeName::Auto | ThemeName::Dark => Self {
-                heading: AnsiColor::Cyan,
-                link: AnsiColor::Blue,
-                code: AnsiColor::Green,
+            ThemeName::Auto => Self {
+                monochrome: true,
+                heading: AnsiColor::White,
+                link: AnsiColor::BrightBlack,
+                code: AnsiColor::BrightBlack,
                 quote: AnsiColor::BrightBlack,
                 rule: AnsiColor::BrightBlack,
                 muted: AnsiColor::BrightBlack,
-                accent: AnsiColor::Yellow,
+                accent: AnsiColor::BrightBlack,
+            },
+            ThemeName::Dark => Self {
+                monochrome: false,
+                heading: AnsiColor::White,
+                link: AnsiColor::BrightBlack,
+                code: AnsiColor::BrightBlack,
+                quote: AnsiColor::BrightBlack,
+                rule: AnsiColor::BrightBlack,
+                muted: AnsiColor::BrightBlack,
+                accent: AnsiColor::Cyan,
             },
             ThemeName::Light => Self {
-                heading: AnsiColor::Blue,
-                link: AnsiColor::BrightBlue,
-                code: AnsiColor::Magenta,
+                monochrome: false,
+                heading: AnsiColor::Black,
+                link: AnsiColor::BrightBlack,
+                code: AnsiColor::BrightBlack,
                 quote: AnsiColor::BrightBlack,
                 rule: AnsiColor::BrightBlack,
                 muted: AnsiColor::BrightBlack,
-                accent: AnsiColor::Red,
+                accent: AnsiColor::Blue,
             },
-            ThemeName::Ansi => Self {
-                heading: AnsiColor::Yellow,
-                link: AnsiColor::Cyan,
-                code: AnsiColor::Green,
-                quote: AnsiColor::White,
-                rule: AnsiColor::White,
-                muted: AnsiColor::White,
-                accent: AnsiColor::Magenta,
+            ThemeName::Minimal => Self {
+                monochrome: true,
+                heading: AnsiColor::White,
+                link: AnsiColor::BrightBlack,
+                code: AnsiColor::BrightBlack,
+                quote: AnsiColor::BrightBlack,
+                rule: AnsiColor::BrightBlack,
+                muted: AnsiColor::BrightBlack,
+                accent: AnsiColor::BrightBlack,
             },
         }
     }

@@ -4,19 +4,23 @@ mod input;
 mod watch;
 
 use std::fs;
-use std::io::{self, Read, Write, stdout};
+use std::io::{self, IsTerminal, Read, Write, stdout};
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
-use crossterm::style::{Attribute, Color, Print, SetAttribute, SetForegroundColor};
+use crossterm::style::{
+    Attribute, Color, Print, SetAttribute, SetBackgroundColor, SetForegroundColor,
+};
 use crossterm::terminal::{
     self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
     enable_raw_mode,
 };
 use crossterm::{execute, queue};
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 use crate::app::AppState;
 use crate::args::CliArgs;
@@ -41,11 +45,15 @@ fn run() -> Result<(), String> {
         println!("{}", CliArgs::usage());
         return Ok(());
     }
+    if args.version {
+        println!("{}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
 
     let source = load_input(args.path.as_deref(), args.read_stdin)?;
     let document = parse_document(&source);
 
-    if args.print {
+    if args.plain || !io::stdout().is_terminal() {
         let layout = layout_document(
             &document,
             &LayoutOptions {
@@ -54,18 +62,19 @@ fn run() -> Result<(), String> {
                 syntax_highlighting: args.syntax_highlighting,
             },
         );
-        print_layout(&layout, args.toc_open)?;
+        print_plain_layout(&layout)?;
         return Ok(());
     }
 
-    run_pager(args, source, document)
+    run_pager(args, document)
 }
 
-fn run_pager(args: CliArgs, _source: String, document: kaku_core::Document) -> Result<(), String> {
+fn run_pager(args: CliArgs, document: kaku_core::Document) -> Result<(), String> {
     let mut stdout = stdout();
     let (width, height) = terminal::size().map_err(|error| error.to_string())?;
     let mut app = AppState::new(
         document,
+        source_name(&args),
         usize::from(width),
         usize::from(height),
         args.theme,
@@ -176,6 +185,9 @@ fn handle_key(
         KeyCode::Char('/') => {
             *prompt = Some(PromptState::new());
         }
+        KeyCode::Char('?') => {
+            app.status = "j/k move  / search  n next  t toc  r reload  q quit".to_string();
+        }
         KeyCode::Char('n') => app.next_search_match(),
         KeyCode::Char('N') => app.previous_search_match(),
         KeyCode::Char('t') => app.toggle_toc(),
@@ -226,15 +238,15 @@ fn draw(
     let width = usize::from(width);
     let height = usize::from(height);
     let body_height = height.saturating_sub(1);
-    let toc_width = if app.toc_open { width.min(30) } else { 0 };
-    let body_width = width.saturating_sub(toc_width);
+    let toc_width = app.toc_width();
+    let frame_x = app.frame_x();
 
     queue!(stdout, MoveTo(0, 0), Clear(ClearType::All)).map_err(|error| error.to_string())?;
 
-    if app.toc_open {
-        draw_toc(stdout, app, toc_width, body_height)?;
+    if app.toc_open && toc_width > 0 {
+        draw_toc(stdout, app, frame_x, toc_width, body_height)?;
     }
-    draw_body(stdout, app, toc_width, body_width, body_height)?;
+    draw_body(stdout, app, body_height)?;
     draw_status(stdout, app, prompt, width, height)?;
     stdout.flush().map_err(|error| error.to_string())?;
     Ok(())
@@ -243,6 +255,7 @@ fn draw(
 fn draw_toc(
     stdout: &mut io::Stdout,
     app: &AppState,
+    offset_x: usize,
     width: usize,
     height: usize,
 ) -> Result<(), String> {
@@ -252,24 +265,26 @@ fn draw_toc(
 
     for (row, entry) in entries[start..end].iter().enumerate() {
         let y = u16::try_from(row).map_err(|_| "screen too tall".to_string())?;
+        let x = u16::try_from(offset_x).map_err(|_| "screen too wide".to_string())?;
         let indent = " ".repeat(entry.level.as_usize().saturating_sub(1) * 2);
         let marker = if start + row == app.toc_selected {
             "› "
         } else {
             "  "
         };
-        let available = width.saturating_sub(marker.len() + indent.len()).max(1);
-        let title = truncate(&entry.title, available);
+        let prefix_width = UnicodeWidthStr::width(marker) + UnicodeWidthStr::width(indent.as_str());
+        let available = width.saturating_sub(prefix_width).max(1);
+        let title = pad_display_width(&truncate_display_width(&entry.title, available), available);
 
         queue!(
             stdout,
-            MoveTo(0, y),
+            MoveTo(x, y),
             SetForegroundColor(if start + row == app.toc_selected {
-                Color::Yellow
+                Color::White
             } else {
                 Color::DarkGrey
             }),
-            Print(format!("{marker}{indent}{title:<available$}")),
+            Print(format!("{marker}{indent}{title}")),
             SetForegroundColor(Color::Reset)
         )
         .map_err(|error| error.to_string())?;
@@ -278,26 +293,16 @@ fn draw_toc(
     Ok(())
 }
 
-fn draw_body(
-    stdout: &mut io::Stdout,
-    app: &AppState,
-    offset_x: usize,
-    width: usize,
-    height: usize,
-) -> Result<(), String> {
+fn draw_body(stdout: &mut io::Stdout, app: &AppState, height: usize) -> Result<(), String> {
     for row in 0..height {
         let Some(line) = app.visible_lines().get(row) else {
             continue;
         };
 
         let y = u16::try_from(row).map_err(|_| "screen too tall".to_string())?;
-        let x = u16::try_from(offset_x).map_err(|_| "screen too wide".to_string())?;
-        let rendered = if line.plain_text.trim().is_empty() {
-            String::new()
-        } else {
-            truncate_ansi(&line.to_ansi_string(), width)
-        };
-        queue!(stdout, MoveTo(x, y), Print(rendered)).map_err(|error| error.to_string())?;
+        let x = u16::try_from(app.body_x()).map_err(|_| "screen too wide".to_string())?;
+        queue!(stdout, MoveTo(x, y), Print(line.to_ansi_string()))
+            .map_err(|error| error.to_string())?;
     }
 
     Ok(())
@@ -307,47 +312,41 @@ fn draw_status(
     stdout: &mut io::Stdout,
     app: &AppState,
     prompt: Option<&PromptState>,
-    width: usize,
+    _width: usize,
     height: usize,
 ) -> Result<(), String> {
     let y = u16::try_from(height.saturating_sub(1)).map_err(|_| "screen too tall".to_string())?;
+    let x = u16::try_from(app.frame_x()).map_err(|_| "screen too wide".to_string())?;
     let text = if let Some(prompt) = prompt {
         format!("/{}", prompt.value())
     } else {
-        format!(
-            "{}  [{} / {}]",
-            app.status,
-            app.scroll + 1,
-            app.layout.lines.len().max(1)
-        )
+        let progress = if app.layout.lines.is_empty() {
+            0
+        } else {
+            ((app.scroll + 1) * 100) / app.layout.lines.len().max(1)
+        };
+        format!("kaku  {}  {}%  {}", app.source_name, progress, app.status)
     };
-    let padded = format!("{:<width$}", truncate(&text, width), width = width);
+    let frame_width = app.frame_width();
+    let padded = pad_display_width(&truncate_display_width(&text, frame_width), frame_width);
     queue!(
         stdout,
-        MoveTo(0, y),
-        SetAttribute(Attribute::Reverse),
+        MoveTo(x, y),
+        SetBackgroundColor(Color::DarkGrey),
+        SetForegroundColor(Color::White),
         Print(padded),
+        SetBackgroundColor(Color::Reset),
+        SetForegroundColor(Color::Reset),
         SetAttribute(Attribute::Reset)
     )
     .map_err(|error| error.to_string())?;
     Ok(())
 }
 
-fn print_layout(layout: &kaku_render::Layout, toc_only: bool) -> Result<(), String> {
-    if toc_only {
-        for entry in &layout.toc {
-            println!(
-                "{}{}",
-                " ".repeat(entry.level.as_usize().saturating_sub(1) * 2),
-                entry.title
-            );
-        }
-        return Ok(());
-    }
-
+fn print_plain_layout(layout: &kaku_render::Layout) -> Result<(), String> {
     let mut stdout = io::stdout().lock();
     for line in &layout.lines {
-        writeln!(stdout, "{}", line.to_ansi_string()).map_err(|error| error.to_string())?;
+        writeln!(stdout, "{}", line.plain_text).map_err(|error| error.to_string())?;
     }
     Ok(())
 }
@@ -389,7 +388,10 @@ fn open_link(target: &str) -> Result<(), String> {
         command
     };
 
-    command.status().map_err(|error| error.to_string())?;
+    let status = command.status().map_err(|error| error.to_string())?;
+    if !status.success() {
+        return Err(format!("failed to open {target}"));
+    }
     Ok(())
 }
 
@@ -399,42 +401,45 @@ fn cleanup_terminal(stdout: &mut io::Stdout) -> Result<(), String> {
     Ok(())
 }
 
-fn truncate(input: &str, width: usize) -> String {
-    input.chars().take(width).collect()
+fn source_name(args: &CliArgs) -> String {
+    args.path
+        .as_deref()
+        .and_then(|path| path.file_name())
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "stdin".to_string())
 }
 
-fn truncate_ansi(input: &str, width: usize) -> String {
-    let mut visible = 0;
+fn truncate_display_width(input: &str, width: usize) -> String {
     let mut out = String::new();
-    let mut chars = input.chars().peekable();
+    let mut used = 0;
 
-    while let Some(ch) = chars.next() {
-        if ch == '\u{1b}' {
-            out.push(ch);
-            for next in chars.by_ref() {
-                out.push(next);
-                if next == 'm' {
-                    break;
-                }
-            }
-            continue;
-        }
-
-        if visible >= width {
+    for grapheme in input.graphemes(true) {
+        let grapheme_width = UnicodeWidthStr::width(grapheme);
+        if used + grapheme_width > width {
             break;
         }
-
-        visible += 1;
-        out.push(ch);
+        used += grapheme_width;
+        out.push_str(grapheme);
     }
 
-    out.push_str("\u{1b}[0m");
+    out
+}
+
+fn pad_display_width(input: &str, width: usize) -> String {
+    let visible = UnicodeWidthStr::width(input);
+    if visible >= width {
+        return input.to_string();
+    }
+
+    let mut out = String::with_capacity(input.len() + (width - visible));
+    out.push_str(input);
+    out.push_str(&" ".repeat(width - visible));
     out
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{print_layout, truncate_ansi};
+    use super::{pad_display_width, print_plain_layout, truncate_display_width};
     use kaku_core::parse_document;
     use kaku_render::{LayoutOptions, ThemeName, layout_document};
 
@@ -449,12 +454,12 @@ mod tests {
                 syntax_highlighting: false,
             },
         );
-        assert!(print_layout(&layout, false).is_ok());
+        assert!(print_plain_layout(&layout).is_ok());
     }
 
     #[test]
-    fn ansi_truncation_keeps_reset() {
-        let text = "\u{1b}[31mhello\u{1b}[0m";
-        assert!(truncate_ansi(text, 3).ends_with("\u{1b}[0m"));
+    fn display_width_helpers_handle_wide_text() {
+        assert_eq!(truncate_display_width("한글abc", 4), "한글");
+        assert_eq!(pad_display_width("한글", 6), "한글  ");
     }
 }
