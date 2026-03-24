@@ -19,12 +19,8 @@ jobs:
         include:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
           - os: macos-14
             target: aarch64-apple-darwin
-          - os: windows-2022
-            target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.os }}
 
@@ -138,55 +134,3 @@ jobs:
           for pkg in "${packages[@]}"; do
             npm publish --access public "./$pkg"
           done
-
-  publish-homebrew:
-    name: publish-homebrew
-    needs: build-global
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-22.04
-
-    steps:
-      - name: Check Homebrew tap token
-        id: homebrew_token
-        shell: bash
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "HOMEBREW_TAP_TOKEN is not configured; skipping Homebrew publish"
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Download formula artifacts
-        if: steps.homebrew_token.outputs.enabled == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          pattern: dist-*
-          path: dist-artifacts
-          merge-multiple: true
-      - name: Checkout tap
-        if: steps.homebrew_token.outputs.enabled == 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: xira-kth/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          path: homebrew-tap
-      - name: Update formula
-        if: steps.homebrew_token.outputs.enabled == 'true'
-        shell: bash
-        run: |
-          shopt -s nullglob
-          formulas=(dist-artifacts/*.rb)
-          if [ ${#formulas[@]} -eq 0 ]; then
-            echo "No Homebrew formula artifact found"
-            exit 1
-          fi
-
-          cp "${formulas[@]}" homebrew-tap/Formula/
-          cd homebrew-tap
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/*.rb
-          git commit -m "Update kaku formula for ${GITHUB_REF_NAME}" || exit 0
-          git push

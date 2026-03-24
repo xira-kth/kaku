@@ -6,19 +6,13 @@
 - Ensure the version in the workspace root `Cargo.toml` is correct.
 - Ensure GitHub Actions is green on `main`.
 - Ensure the npm scope in the root `Cargo.toml` matches a real npm org or user.
-- Ensure the Homebrew tap in the root `Cargo.toml` exists.
-
-## Required Secrets
-
-- `HOMEBREW_TAP_TOKEN`
-  - Required only if you want the workflow to push formula updates to the Homebrew tap.
 
 ## npm Publishing
 
 - Recommended: use npm trusted publishing with GitHub Actions OIDC.
 - Do not store a long-lived npm publish token in the repository or in a checked-in `.env` file.
 - Configure a trusted publisher on npm for:
-  - Organization or user: `xira-kth`
+  - Organization or user: `voidique`
   - Repository: `kaku`
   - Workflow filename: `release.yml`
 - The release workflow already has `id-token: write`, which npm trusted publishing requires.
@@ -49,6 +43,11 @@ git push origin v0.1.1
 4. Let the release workflow build artifacts for each target.
 5. Publish through the release workflow.
 6. If npm trusted publishing is configured, npm publish will use OIDC and no token is needed.
+
+## Homebrew
+
+- Homebrew publish is intentionally not part of the current release workflow.
+- Add it back later after the tap repository and token are ready.
 
 ## Notes
 
