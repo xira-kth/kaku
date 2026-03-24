@@ -35,7 +35,10 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
       - name: Install dist
-        run: cargo install cargo-dist --locked --version 0.31.0
+        shell: bash
+        run: |
+          cargo uninstall cargo-dist || true
+          cargo install cargo-dist --locked --version 0.31.0 --force
       - name: Build local artifacts
         run: dist build --allow-dirty --artifacts=local --target ${{ matrix.target }}
       - name: Upload local artifacts
@@ -54,7 +57,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install dist
-        run: cargo install cargo-dist --locked --version 0.31.0
+        shell: bash
+        run: |
+          cargo uninstall cargo-dist || true
+          cargo install cargo-dist --locked --version 0.31.0 --force
       - name: Download local artifacts
         uses: actions/download-artifact@v4
         with:
