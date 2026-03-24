@@ -1,0 +1,21 @@
+[package]
+name = "kaku-render"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["syntax"]
+syntax = ["dep:syntect"]
+
+[dependencies]
+anstyle.workspace = true
+kaku-core = { path = "../kaku-core" }
+syntect = { workspace = true, optional = true }
+unicode-segmentation.workspace = true
+unicode-width.workspace = true
+

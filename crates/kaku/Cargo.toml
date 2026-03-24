@@ -1,0 +1,30 @@
+[package]
+name = "kaku"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+default-run = "kaku"
+
+[[bin]]
+name = "kaku"
+path = "src/main.rs"
+
+[features]
+default = ["syntax"]
+syntax = ["kaku-render/syntax"]
+
+[dependencies]
+crossterm.workspace = true
+kaku-core = { path = "../kaku-core" }
+kaku-render = { path = "../kaku-render", default-features = false }
+notify.workspace = true
+pico-args.workspace = true
+regex-automata.workspace = true
+
+[dev-dependencies]
+anstyle.workspace = true
+
