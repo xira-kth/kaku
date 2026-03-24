@@ -41,9 +41,9 @@
 3. Tag the release:
 
 ```bash
-git tag v0.1.0
+git tag v0.1.1
 git push origin main
-git push origin v0.1.0
+git push origin v0.1.1
 ```
 
 4. Let the release workflow build artifacts for each target.

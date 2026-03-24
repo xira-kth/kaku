@@ -261,7 +261,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "kaku"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anstyle",
  "crossterm",
@@ -275,14 +275,14 @@ dependencies = [
 
 [[package]]
 name = "kaku-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "pulldown-cmark",
 ]
 
 [[package]]
 name = "kaku-render"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anstyle",
  "kaku-core",
