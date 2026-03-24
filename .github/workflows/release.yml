@@ -17,13 +17,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-          - os: macos-13
+          - os: macos-15-intel
             target: x86_64-apple-darwin
-          - os: macos-latest
+          - os: macos-14
             target: aarch64-apple-darwin
-          - os: windows-latest
+          - os: windows-2022
             target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.os }}
@@ -47,7 +47,7 @@ jobs:
   build-global:
     name: build-global
     needs: build-local
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +72,7 @@ jobs:
   github-release:
     name: github-release
     needs: build-global
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Download release artifacts
@@ -89,7 +89,7 @@ jobs:
   publish-npm:
     name: publish-npm
     needs: build-global
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Check npm token
@@ -134,7 +134,7 @@ jobs:
   publish-homebrew:
     name: publish-homebrew
     needs: build-global
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Check Homebrew tap token
