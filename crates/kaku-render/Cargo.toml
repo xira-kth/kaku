@@ -7,9 +7,11 @@ repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
+description = "Rendering and layout engine for the kaku terminal Markdown reader"
+readme = "../../README.md"
 
 [features]
-default = ["syntax"]
+default = []
 syntax = ["dep:syntect"]
 
 [dependencies]
@@ -18,4 +20,3 @@ kaku-core = { path = "../kaku-core" }
 syntect = { workspace = true, optional = true }
 unicode-segmentation.workspace = true
 unicode-width.workspace = true
-

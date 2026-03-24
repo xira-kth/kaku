@@ -11,20 +11,8 @@ permissions:
   id-token: write
 
 jobs:
-  plan:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-dist
-        run: cargo install cargo-dist --locked --version 0.31.0
-      - name: Validate release plan
-        run: cargo dist plan
-
-  build:
-    needs: plan
+  build-local:
+    name: build-local (${{ matrix.target }})
     strategy:
       fail-fast: false
       matrix:
@@ -37,6 +25,7 @@ jobs:
             target: aarch64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -45,5 +34,121 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - name: Build release binary
-        run: cargo build --profile dist --locked --target ${{ matrix.target }} -p kaku
+      - name: Install dist
+        run: cargo install cargo-dist --locked --version 0.31.0
+      - name: Build local artifacts
+        run: dist build --allow-dirty --artifacts=local --target ${{ matrix.target }}
+      - name: Upload local artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-local-${{ matrix.target }}
+          path: target/distrib/*
+
+  build-global:
+    name: build-global
+    needs: build-local
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install dist
+        run: cargo install cargo-dist --locked --version 0.31.0
+      - name: Download local artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-local-*
+          path: target/distrib
+          merge-multiple: true
+      - name: Build global artifacts
+        run: dist build --allow-dirty --artifacts=global
+      - name: Upload global artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-global
+          path: target/distrib/*
+
+  github-release:
+    name: github-release
+    needs: build-global
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist-artifacts
+          merge-multiple: true
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-artifacts/*
+
+  publish-npm:
+    name: publish-npm
+    needs: build-global
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download npm packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist-artifacts
+          merge-multiple: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+      - name: Publish npm package
+        shell: bash
+        run: |
+          shopt -s nullglob
+          packages=(dist-artifacts/*-npm-package.tar.gz)
+          if [ ${#packages[@]} -eq 0 ]; then
+            echo "No npm package artifact found"
+            exit 1
+          fi
+
+          for pkg in "${packages[@]}"; do
+            npm publish --access public "$pkg"
+          done
+
+  publish-homebrew:
+    name: publish-homebrew
+    needs: build-global
+    if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download formula artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist-artifacts
+          merge-multiple: true
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: xira-kth/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+      - name: Update formula
+        shell: bash
+        run: |
+          shopt -s nullglob
+          formulas=(dist-artifacts/*.rb)
+          if [ ${#formulas[@]} -eq 0 ]; then
+            echo "No Homebrew formula artifact found"
+            exit 1
+          fi
+
+          cp "${formulas[@]}" homebrew-tap/Formula/
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/*.rb
+          git commit -m "Update kaku formula for ${GITHUB_REF_NAME}" || exit 0
+          git push

@@ -6,6 +6,18 @@ on:
   pull_request:
 
 jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit dependencies
+        run: cargo audit
+
   test:
     strategy:
       fail-fast: false
@@ -20,6 +32,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format
         run: cargo fmt --check
+      - name: Clippy (default features)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Tests (default features)
+        run: cargo test --workspace
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Tests

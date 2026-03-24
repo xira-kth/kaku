@@ -10,11 +10,11 @@ resolver = "2"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/voidique/kaku"
-homepage = "https://github.com/voidique/kaku"
-documentation = "https://github.com/voidique/kaku"
+repository = "https://github.com/xira-kth/kaku"
+homepage = "https://github.com/xira-kth/kaku"
+documentation = "https://github.com/xira-kth/kaku"
 rust-version = "1.85"
-authors = ["voidique"]
+authors = ["xira-kth"]
 
 [profile.dist]
 inherits = "release"
@@ -30,16 +30,31 @@ syntect = { version = "5.3.0", default-features = false, features = ["default-fa
 unicode-segmentation = "1.12.0"
 unicode-width = "0.2.2"
 
+# Config for 'dist'
 [workspace.metadata.dist]
+# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
 cargo-dist-version = "0.31.0"
-ci = ["github"]
+# CI backends to support
+ci = "github"
+# The installers to generate for each app
 installers = ["shell", "powershell", "npm", "homebrew"]
-targets = [
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-    "x86_64-unknown-linux-gnu",
-    "x86_64-pc-windows-msvc",
-]
-tap = "voidique/homebrew-tap"
-npm-scope = "@voidique"
+# Publish jobs to run in CI
+publish-jobs = ["npm", "homebrew"]
+# Whether to enable GitHub Attestations
+github-attestations = true
+# Target platforms to build apps for (Rust target-triple syntax)
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+# A GitHub repo to push Homebrew formulas to
+tap = "xira-kth/homebrew-tap"
+# A namespace to use when publishing this package to the npm registry
+npm-scope = "@xira-kth"
+# Which actions to run on pull requests
 pr-run-mode = "plan"
+# Skip dist's generated-CI drift checks because this repo maintains the release workflow manually
+allow-dirty = ["ci"]
+# Path that installers should place binaries in
+install-path = "CARGO_HOME"
+# Where to host releases
+hosting = "github"
+# Whether to install an updater program
+install-updater = false

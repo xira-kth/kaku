@@ -29,7 +29,7 @@ impl CliArgs {
                 plain: false,
                 watch: false,
                 toc_open: false,
-                syntax_highlighting: true,
+                syntax_highlighting: cfg!(feature = "syntax"),
                 theme: ThemeName::Auto,
                 help: true,
                 version: false,
@@ -43,7 +43,7 @@ impl CliArgs {
                 plain: false,
                 watch: false,
                 toc_open: false,
-                syntax_highlighting: true,
+                syntax_highlighting: cfg!(feature = "syntax"),
                 theme: ThemeName::Auto,
                 help: false,
                 version: true,
@@ -54,7 +54,7 @@ impl CliArgs {
         let plain = args.contains(["-p", "--plain"]) || args.contains("--print");
         let watch = args.contains(["-w", "--watch"]);
         let toc_open = args.contains(["-t", "--toc"]);
-        let syntax_highlighting = !args.contains("--no-syntax");
+        let syntax_highlighting = cfg!(feature = "syntax") && !args.contains("--no-syntax");
 
         let theme = match args.opt_value_from_str::<_, String>(["-T", "--theme"]) {
             Ok(Some(name)) => ThemeName::parse(&name).ok_or_else(|| {
@@ -121,7 +121,7 @@ OPTIONS:
   -t, --toc           Start with the table of contents open
   -T, --theme <NAME>  auto | light | dark | minimal
   --stdin             Force reading from stdin
-  --no-syntax         Disable syntax highlighting
+  --no-syntax         Disable syntax highlighting (feature builds only)
   -h, --help          Show help
   -V, --version       Show version
 

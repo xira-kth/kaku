@@ -8,13 +8,15 @@ homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 default-run = "kaku"
+description = "A fast, minimal Markdown reader for terminals"
+readme = "../../README.md"
 
 [[bin]]
 name = "kaku"
 path = "src/main.rs"
 
 [features]
-default = ["syntax"]
+default = []
 syntax = ["kaku-render/syntax"]
 
 [dependencies]

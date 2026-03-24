@@ -7,7 +7,8 @@ repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
+description = "Markdown parsing and document modeling for the kaku terminal reader"
+readme = "../../README.md"
 
 [dependencies]
 pulldown-cmark.workspace = true
-

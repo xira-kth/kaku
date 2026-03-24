@@ -1,4 +1,6 @@
 /target
 /.cargo-dist
 /.DS_Store
-
+.env
+.env.*
+.npmrc

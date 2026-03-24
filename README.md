@@ -23,6 +23,7 @@ It is built as a small Rust workspace with three clean layers:
 - Unicode-aware wrapping for CJK and emoji-heavy text
 - Headings, lists, tables, blockquotes, task lists, links, and code blocks
 - Search, TOC panel, file watching, and stdin support
+- Optional syntax highlighting for source builds with `--features syntax`
 
 ## Usage
 
@@ -54,5 +55,4 @@ kaku -t README.md
 ## Packaging
 
 The workspace ships with `cargo-dist` metadata for GitHub Releases, Homebrew, and npm.
-Update the repository, tap, and scope values in the root `Cargo.toml` if your release
-infrastructure uses different owners.
+See [docs/RELEASING.md](/Users/voidique/folders/kaku/docs/RELEASING.md) for the current release flow.

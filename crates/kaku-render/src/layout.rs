@@ -396,10 +396,10 @@ impl Renderer {
     }
 }
 
-fn render_code_lines(fence: &CodeFence, theme: Theme, enabled: bool) -> Vec<Vec<StyledSpan>> {
+fn render_code_lines(fence: &CodeFence, theme: Theme, _enabled: bool) -> Vec<Vec<StyledSpan>> {
     #[cfg(feature = "syntax")]
     {
-        if enabled && !theme.monochrome {
+        if _enabled && !theme.monochrome {
             return crate::syntax::highlight_code(fence, theme);
         }
     }
