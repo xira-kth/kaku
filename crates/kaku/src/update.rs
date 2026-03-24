@@ -197,7 +197,7 @@ fn fetch_latest_version() -> Result<String, String> {
         .get(RELEASES_API)
         .set("User-Agent", &format!("kaku/{CURRENT_VERSION}"))
         .call()
-        .map_err(|error: ureq::Error| error.to_string())?;
+        .map_err(normalize_fetch_error)?;
 
     let body = response
         .into_string()
@@ -242,6 +242,13 @@ fn is_newer_than_current(version: &str) -> bool {
         return false;
     };
     candidate > current
+}
+
+fn normalize_fetch_error(error: ureq::Error) -> String {
+    match error {
+        ureq::Error::Status(404, _) => "latest release not found".to_string(),
+        other => other.to_string(),
+    }
 }
 
 fn current_unix_time() -> u64 {
