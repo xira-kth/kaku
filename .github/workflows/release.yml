@@ -92,17 +92,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check npm token
+        id: npm_token
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "NPM_TOKEN is not configured; skipping npm publish"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Download npm packages
+        if: steps.npm_token.outputs.enabled == 'true'
         uses: actions/download-artifact@v4
         with:
           pattern: dist-*
           path: dist-artifacts
           merge-multiple: true
       - uses: actions/setup-node@v4
+        if: steps.npm_token.outputs.enabled == 'true'
         with:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
       - name: Publish npm package
+        if: steps.npm_token.outputs.enabled == 'true'
         shell: bash
         run: |
           shopt -s nullglob
@@ -119,23 +134,37 @@ jobs:
   publish-homebrew:
     name: publish-homebrew
     needs: build-global
-    if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check Homebrew tap token
+        id: homebrew_token
+        shell: bash
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "HOMEBREW_TAP_TOKEN is not configured; skipping Homebrew publish"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Download formula artifacts
+        if: steps.homebrew_token.outputs.enabled == 'true'
         uses: actions/download-artifact@v4
         with:
           pattern: dist-*
           path: dist-artifacts
           merge-multiple: true
       - name: Checkout tap
+        if: steps.homebrew_token.outputs.enabled == 'true'
         uses: actions/checkout@v4
         with:
           repository: xira-kth/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-tap
       - name: Update formula
+        if: steps.homebrew_token.outputs.enabled == 'true'
         shell: bash
         run: |
           shopt -s nullglob
