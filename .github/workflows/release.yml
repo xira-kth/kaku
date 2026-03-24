@@ -78,6 +78,7 @@ jobs:
   github-release:
     name: github-release
     needs: build-global
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
 
     steps:
@@ -95,6 +96,7 @@ jobs:
   publish-npm:
     name: publish-npm
     needs: build-global
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
 
     steps:
@@ -134,12 +136,13 @@ jobs:
           fi
 
           for pkg in "${packages[@]}"; do
-            npm publish --access public "$pkg"
+            npm publish --access public "./$pkg"
           done
 
   publish-homebrew:
     name: publish-homebrew
     needs: build-global
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
 
     steps:
