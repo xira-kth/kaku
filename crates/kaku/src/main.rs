@@ -1,12 +1,14 @@
 mod app;
 mod args;
 mod input;
+mod update;
 mod watch;
 
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write, stdout};
 use std::path::Path;
 use std::process::Command;
+use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
 use crossterm::cursor::{Hide, MoveTo, Show};
@@ -23,8 +25,9 @@ use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use crate::app::AppState;
-use crate::args::CliArgs;
+use crate::args::{CliArgs, CommandKind};
 use crate::input::{PromptAction, PromptState};
+use crate::update::{spawn_update_checker, update_notice};
 use crate::watch::FileWatcher;
 use kaku_core::parse_document;
 use kaku_render::{LayoutOptions, layout_document};
@@ -48,6 +51,9 @@ fn run() -> Result<(), String> {
     if args.version {
         println!("{}", env!("CARGO_PKG_VERSION"));
         return Ok(());
+    }
+    if matches!(args.command, CommandKind::Update) {
+        return update::run_update();
     }
 
     let source = load_input(args.path.as_deref(), args.read_stdin)?;
@@ -81,6 +87,9 @@ fn run_pager(args: CliArgs, document: kaku_core::Document) -> Result<(), String>
         args.syntax_highlighting,
         args.toc_open,
     );
+    if let Some(version) = update::cached_newer_version() {
+        app.status = update_notice(&version);
+    }
     let mut watcher = if args.watch {
         args.path
             .as_deref()
@@ -91,11 +100,19 @@ fn run_pager(args: CliArgs, document: kaku_core::Document) -> Result<(), String>
         None
     };
     let mut prompt = None;
+    let update_receiver = spawn_update_checker();
 
     enable_raw_mode().map_err(|error| error.to_string())?;
     execute!(stdout, EnterAlternateScreen, Hide).map_err(|error| error.to_string())?;
 
-    let result = pager_loop(&mut stdout, &mut app, &args, &mut watcher, &mut prompt);
+    let result = pager_loop(
+        &mut stdout,
+        &mut app,
+        &args,
+        &mut watcher,
+        &mut prompt,
+        &update_receiver,
+    );
     let cleanup_result = cleanup_terminal(&mut stdout);
 
     result.and(cleanup_result)
@@ -107,8 +124,13 @@ fn pager_loop(
     args: &CliArgs,
     watcher: &mut Option<FileWatcher>,
     prompt: &mut Option<PromptState>,
+    update_receiver: &Receiver<Option<String>>,
 ) -> Result<(), String> {
     loop {
+        if let Ok(Some(version)) = update_receiver.try_recv() {
+            app.status = update_notice(&version);
+        }
+
         draw(stdout, app, prompt.as_ref())?;
 
         if watcher.as_mut().is_some_and(FileWatcher::has_changes) {

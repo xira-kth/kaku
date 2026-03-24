@@ -1,0 +1,15 @@
+{
+  "name": "kaku-maintainer",
+  "private": true,
+  "version": "0.1.2",
+  "description": "Maintainer scripts for building and publishing kaku",
+  "scripts": {
+    "version:kaku": "cargo run --quiet -- --version",
+    "dist:global": "dist build --allow-dirty --artifacts=global",
+    "npm:tarball": "npm run dist:global && ls -lh ./target/distrib/kaku-npm-package.tar.gz",
+    "npm:publish": "npm run dist:global && npm publish --access public ./target/distrib/kaku-npm-package.tar.gz",
+    "npm:publish:dry-run": "npm run dist:global && npm publish --dry-run --access public ./target/distrib/kaku-npm-package.tar.gz",
+    "npm:view": "npm view @voidique/kaku",
+    "npm:version": "npm view @voidique/kaku version"
+  }
+}

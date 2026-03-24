@@ -5,8 +5,15 @@ use pico_args::Arguments;
 
 use kaku_render::ThemeName;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandKind {
+    Read,
+    Update,
+}
+
 #[derive(Debug, Clone)]
 pub struct CliArgs {
+    pub command: CommandKind,
     pub path: Option<PathBuf>,
     pub read_stdin: bool,
     pub plain: bool,
@@ -24,6 +31,7 @@ impl CliArgs {
 
         if args.contains(["-h", "--help"]) {
             return Ok(Self {
+                command: CommandKind::Read,
                 path: None,
                 read_stdin: false,
                 plain: false,
@@ -38,6 +46,7 @@ impl CliArgs {
 
         if args.contains(["-V", "--version"]) {
             return Ok(Self {
+                command: CommandKind::Read,
                 path: None,
                 read_stdin: false,
                 plain: false,
@@ -75,24 +84,32 @@ impl CliArgs {
             return Err(format!("unexpected argument {:?}", remaining[0]));
         }
 
+        let command = if matches!(path.as_deref(), Some(path) if path == Path::new("update")) {
+            CommandKind::Update
+        } else {
+            CommandKind::Read
+        };
+
         let read_stdin = explicit_stdin
             || matches!(path.as_deref(), Some(path) if path == Path::new("-"))
             || (path.is_none() && !std::io::stdin().is_terminal());
 
         let path = match path {
             Some(path) if path == Path::new("-") => None,
+            Some(path) if path == Path::new("update") => None,
             other => other,
         };
 
-        if !read_stdin && path.is_none() {
+        if matches!(command, CommandKind::Read) && !read_stdin && path.is_none() {
             return Err("expected a file path or piped stdin".to_string());
         }
 
-        if watch && path.is_none() {
+        if matches!(command, CommandKind::Read) && watch && path.is_none() {
             return Err("--watch requires a file path".to_string());
         }
 
         Ok(Self {
+            command,
             path,
             read_stdin,
             plain,
@@ -110,6 +127,7 @@ impl CliArgs {
 kaku - fast, minimal Markdown reader for terminals
 
 USAGE:
+  kaku update
   kaku <FILE>
   kaku [OPTIONS] <FILE>
   cat README.md | kaku
@@ -126,6 +144,7 @@ OPTIONS:
   -V, --version       Show version
 
 EXAMPLES:
+  kaku update
   kaku README.md
   kaku -p README.md
   kaku -w README.md

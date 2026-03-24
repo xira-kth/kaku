@@ -25,6 +25,8 @@ kaku-core = { path = "../kaku-core" }
 kaku-render = { path = "../kaku-render", default-features = false }
 notify.workspace = true
 pico-args.workspace = true
+semver = "1.0.27"
+ureq = { version = "2.12.1", default-features = true }
 unicode-segmentation.workspace = true
 unicode-width.workspace = true
 
